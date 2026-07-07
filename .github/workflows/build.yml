@@ -57,19 +57,19 @@ jobs:
 
     steps:
       - name: Checkout desktop
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: fasten-share-desktop
 
       - name: Checkout client
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: fasten-share/fasten-share-client
           ref: ${{ inputs.client_ref || 'main' }}
           path: fasten-share-client
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -91,10 +91,10 @@ jobs:
 
       - name: Package desktop app
         working-directory: fasten-share-desktop
-        run: npm run ${{ matrix.package_script }}
+        run: npm run ${{ matrix.package_script }} -- --publish never
 
       - name: Upload desktop artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.artifact_paths }}
