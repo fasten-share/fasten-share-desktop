@@ -1,0 +1,25 @@
+{
+  "name": "fasten-share-desktop",
+  "version": "0.1.0",
+  "description": "Fasten Share desktop shell (Electron). Runs the Next.js client as an embedded Node server and packages it.",
+  "license": "MIT",
+  "author": "Fasten Share",
+  "main": "dist-electron/main/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.main.json",
+    "typecheck": "tsc -p tsconfig.main.json --noEmit",
+    "dev": "npm run build && wait-on tcp:8086 && cross-env DEV_URL=http://localhost:8086 electron .",
+    "rebuild:native": "electron-rebuild --module-dir server-dist --only node-datachannel --force",
+    "dist:mac": "npm run build && npm run rebuild:native && electron-builder --mac dmg",
+    "dist:win": "npm run build && npm run rebuild:native && electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.7.0",
+    "@types/node": "^22.10.0",
+    "cross-env": "^7.0.3",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.7.2",
+    "wait-on": "^8.0.1"
+  }
+}

@@ -1,0 +1,28 @@
+appId: com.fastenshare.desktop
+productName: Fasten Share
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist-electron/**/*
+  - package.json
+# The Next standalone bundle is a runnable Node server — ship it UNPACKED
+# (outside app.asar) so utilityProcess can fork its server.js and load any
+# platform binaries Next traced in.
+extraResources:
+  - from: server-dist
+    to: server-dist
+win:
+  icon: build/icon.ico
+  target:
+    - nsis
+mac:
+  icon: build/icon.icns
+  target:
+    - dmg
+  category: public.app-category.developer-tools
+  # macOS distribution requires Apple Developer signing + notarization,
+  # otherwise Gatekeeper blocks the app (see DESIGN §10).
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

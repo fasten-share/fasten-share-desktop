@@ -1,0 +1,102 @@
+name: Build Desktop
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      client_ref:
+        description: "fasten-share-client branch, tag, or commit to package"
+        required: false
+        default: "main"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            package_script: dist:win
+            artifact_name: fasten-share-desktop-windows
+            artifact_paths: |
+              fasten-share-desktop/release/*.exe
+              fasten-share-desktop/release/*.blockmap
+              fasten-share-desktop/release/latest*.yml
+          - name: macOS
+            os: macos-15-intel
+            package_script: dist:mac
+            artifact_name: fasten-share-desktop-macos
+            artifact_paths: |
+              fasten-share-desktop/release/*.dmg
+              fasten-share-desktop/release/*.zip
+              fasten-share-desktop/release/*.blockmap
+              fasten-share-desktop/release/latest*.yml
+
+    env:
+      CI: true
+      NEXT_TELEMETRY_DISABLED: 1
+      CSC_IDENTITY_AUTO_DISCOVERY: false
+
+    steps:
+      - name: Checkout desktop
+        uses: actions/checkout@v4
+        with:
+          path: fasten-share-desktop
+
+      - name: Checkout client
+        uses: actions/checkout@v4
+        with:
+          repository: fasten-share/fasten-share-client
+          ref: ${{ inputs.client_ref || 'main' }}
+          path: fasten-share-client
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            fasten-share-client/package-lock.json
+            fasten-share-desktop/package-lock.json
+
+      - name: Install client dependencies
+        working-directory: fasten-share-client
+        run: npm ci
+
+      - name: Export client for desktop
+        working-directory: fasten-share-client
+        run: npm run export:desktop
+
+      - name: Install desktop dependencies
+        working-directory: fasten-share-desktop
+        run: npm ci
+
+      - name: Package desktop app
+        working-directory: fasten-share-desktop
+        run: npm run ${{ matrix.package_script }}
+
+      - name: Upload desktop artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_paths }}
+          if-no-files-found: error
+          retention-days: 14
