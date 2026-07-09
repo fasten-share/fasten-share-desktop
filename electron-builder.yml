@@ -12,6 +12,9 @@ files:
 extraResources:
   - from: server-dist
     to: server-dist
+publish:
+  provider: generic
+  url: https://www.fastenshare.com/download
 win:
   icon: build/icon.ico
   target:
@@ -20,6 +23,7 @@ mac:
   icon: build/icon.icns
   target:
     - dmg
+    - zip
   category: public.app-category.developer-tools
   # macOS distribution requires Apple Developer signing + notarization,
   # otherwise Gatekeeper blocks the app (see DESIGN §10).

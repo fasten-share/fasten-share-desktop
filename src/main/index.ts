@@ -11,8 +11,9 @@
  */
 import { join } from 'node:path';
 import { createServer } from 'node:net';
-import { app, BrowserWindow, net, utilityProcess } from 'electron';
-import type { UtilityProcess } from 'electron';
+import { app, BrowserWindow, dialog, net, utilityProcess } from 'electron';
+import type { MessageBoxOptions, UtilityProcess } from 'electron';
+import { autoUpdater } from 'electron-updater';
 
 // In dev, point at the running `next dev` server (see package.json `dev`).
 const DEV_URL = process.env.DEV_URL;
@@ -20,9 +21,12 @@ const DEV_URL = process.env.DEV_URL;
 // In prod the standalone bundle is shipped unpacked as an extraResource.
 const SERVER_DIR = join(process.resourcesPath, 'server-dist');
 const SERVER_ENTRY = join(SERVER_DIR, 'server.js');
+const UPDATE_BASE_URL = process.env.FASTEN_SHARE_UPDATE_BASE_URL || 'https://www.fastenshare.com/download';
+const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 let win: BrowserWindow | undefined;
 let serverProc: UtilityProcess | undefined;
+let updateCheckInFlight = false;
 
 /** Ask the OS for a free TCP port on the loopback interface. */
 function findFreePort(): Promise<number> {
@@ -87,9 +91,60 @@ function createWindow(url: string): void {
   });
 }
 
+function getUpdateChannel(): { dir: string } | null {
+  if (process.platform === 'win32') return { dir: 'windows' };
+  if (process.platform === 'darwin') return { dir: 'macos' };
+  if (process.platform === 'linux') return { dir: 'linux' };
+  return null;
+}
+
+function configureAutoUpdater(): void {
+  const channel = getUpdateChannel();
+  if (!channel || DEV_URL || !app.isPackaged) return;
+
+  const baseUrl = UPDATE_BASE_URL.replace(/\/+$/, '');
+  autoUpdater.setFeedURL({ provider: 'generic', url: `${baseUrl}/${channel.dir}` });
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('error', (error) => {
+    console.warn('[update] check failed', error);
+  });
+  autoUpdater.on('update-downloaded', async (info) => {
+    const options: MessageBoxOptions = {
+      type: 'info',
+      buttons: ['Restart now', 'Later'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'Fasten Share update ready',
+      message: `Fasten Share ${info.version} is ready to install.`,
+      detail: 'Restart Fasten Share to finish installing the update.',
+    };
+    const result = win && !win.isDestroyed()
+      ? await dialog.showMessageBox(win, options)
+      : await dialog.showMessageBox(options);
+    if (result.response === 0) autoUpdater.quitAndInstall(false, true);
+  });
+}
+
+async function checkForUpdates(): Promise<void> {
+  if (DEV_URL || !app.isPackaged || updateCheckInFlight) return;
+  updateCheckInFlight = true;
+  try {
+    await autoUpdater.checkForUpdates();
+  } catch (error) {
+    console.warn('[update] check failed', error);
+  } finally {
+    updateCheckInFlight = false;
+  }
+}
+
 app.whenReady().then(async () => {
   const url = DEV_URL ?? (await startNextServer());
   createWindow(url);
+  configureAutoUpdater();
+  setTimeout(() => void checkForUpdates(), 15_000);
+  setInterval(() => void checkForUpdates(), UPDATE_CHECK_INTERVAL_MS);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow(url);
