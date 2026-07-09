@@ -49,6 +49,15 @@ jobs:
               fasten-share-desktop/release/*.zip
               fasten-share-desktop/release/*.blockmap
               fasten-share-desktop/release/latest*.yml
+          - name: Linux
+            os: ubuntu-latest
+            package_script: dist:linux
+            artifact_name: fasten-share-desktop-linux
+            artifact_paths: |
+              fasten-share-desktop/release/*.AppImage
+              fasten-share-desktop/release/*.deb
+              fasten-share-desktop/release/*.blockmap
+              fasten-share-desktop/release/latest*.yml
 
     env:
       CI: true

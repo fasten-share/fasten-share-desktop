@@ -23,6 +23,12 @@ mac:
   category: public.app-category.developer-tools
   # macOS distribution requires Apple Developer signing + notarization,
   # otherwise Gatekeeper blocks the app (see DESIGN §10).
+linux:
+  icon: build/icon.png
+  target:
+    - AppImage
+    - deb
+  category: Utility
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
