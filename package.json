@@ -3,7 +3,7 @@
   "version": "0.1.2",
   "description": "Fasten Share desktop shell (Electron). Runs the Next.js client as an embedded Node server and packages it.",
   "license": "MIT",
-  "author": "Fasten Share",
+  "author": "Fasten Share <fastenshare@qq.com>",
   "main": "dist-electron/main/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.main.json",
