@@ -5,6 +5,7 @@ directories:
   buildResources: build
 files:
   - dist-electron/**/*
+  - build/icons/icon-32.png
   - package.json
 # The Next standalone bundle is a runnable Node server — ship it UNPACKED
 # (outside app.asar) so utilityProcess can fork its server.js and load any

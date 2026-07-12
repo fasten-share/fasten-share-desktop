@@ -11,7 +11,7 @@
  */
 import { join } from 'node:path';
 import { createServer } from 'node:net';
-import { app, BrowserWindow, dialog, net, utilityProcess } from 'electron';
+import { app, BrowserWindow, dialog, Menu, net, Tray, utilityProcess } from 'electron';
 import type { MessageBoxOptions, UtilityProcess } from 'electron';
 import { autoUpdater } from 'electron-updater';
 
@@ -25,8 +25,10 @@ const UPDATE_BASE_URL = process.env.FASTEN_SHARE_UPDATE_BASE_URL || 'https://www
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 let win: BrowserWindow | undefined;
+let tray: Tray | undefined;
 let serverProc: UtilityProcess | undefined;
 let updateCheckInFlight = false;
+let isQuitting = false;
 
 /** Ask the OS for a free TCP port on the loopback interface. */
 function findFreePort(): Promise<number> {
@@ -86,9 +88,42 @@ function createWindow(url: string): void {
   });
   win.removeMenu();
   void win.loadURL(url);
+  win.on('close', (event) => {
+    if (isQuitting) return;
+    event.preventDefault();
+    win?.hide();
+  });
   win.on('closed', () => {
     win = undefined;
   });
+}
+
+function showWindow(): void {
+  if (!win || win.isDestroyed()) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+}
+
+function createTray(): void {
+  const iconPath = join(app.getAppPath(), 'build', 'icons', 'icon-32.png');
+  tray = new Tray(iconPath);
+  tray.setToolTip('Fasten Share');
+  tray.setContextMenu(Menu.buildFromTemplate([
+    {
+      label: '显示 Fasten Share',
+      click: showWindow,
+    },
+    { type: 'separator' },
+    {
+      label: '退出',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    },
+  ]));
+  tray.on('click', showWindow);
 }
 
 function getUpdateChannel(): { dir: string } | null {
@@ -142,20 +177,23 @@ async function checkForUpdates(): Promise<void> {
 app.whenReady().then(async () => {
   const url = DEV_URL ?? (await startNextServer());
   createWindow(url);
+  createTray();
   configureAutoUpdater();
   setTimeout(() => void checkForUpdates(), 15_000);
   setInterval(() => void checkForUpdates(), UPDATE_CHECK_INTERVAL_MS);
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow(url);
+    if (!win || win.isDestroyed()) createWindow(url);
+    else showWindow();
   });
 });
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+app.on('before-quit', () => {
+  isQuitting = true;
 });
 
 // Make sure the embedded server doesn't outlive the app.
 app.on('quit', () => {
+  tray?.destroy();
   serverProc?.kill();
 });
