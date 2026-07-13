@@ -33,7 +33,7 @@ let isQuitting = false;
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 
 /** Ask the OS for a free TCP port on the loopback interface. */
-function findFreePort(): Promise<number> {
+export function findFreePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const srv = createServer();
     srv.once('error', reject);
@@ -46,7 +46,7 @@ function findFreePort(): Promise<number> {
 }
 
 /** Poll the server until it answers (or time out). */
-async function waitForServer(url: string, timeoutMs = 30_000): Promise<void> {
+export async function waitForServer(url: string, timeoutMs = 30_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     try {
@@ -60,7 +60,7 @@ async function waitForServer(url: string, timeoutMs = 30_000): Promise<void> {
 }
 
 /** Spawn the standalone Next server and resolve once it's reachable. */
-async function startNextServer(): Promise<string> {
+export async function startNextServer(): Promise<string> {
   const port = await findFreePort();
   serverProc = utilityProcess.fork(SERVER_ENTRY, [], {
     cwd: SERVER_DIR,
@@ -79,7 +79,7 @@ async function startNextServer(): Promise<string> {
   return url;
 }
 
-function createWindow(url: string): void {
+export function createWindow(url: string): void {
   win = new BrowserWindow({
     width: 1100,
     height: 760,
@@ -100,14 +100,14 @@ function createWindow(url: string): void {
   });
 }
 
-function showWindow(): void {
+export function showWindow(): void {
   if (!win || win.isDestroyed()) return;
   if (win.isMinimized()) win.restore();
   win.show();
   win.focus();
 }
 
-function createTray(): void {
+export function createTray(): void {
   const iconPath = join(app.getAppPath(), 'build', 'icons', 'icon-32.png');
   tray = new Tray(iconPath);
   tray.setToolTip('Fasten Share');
@@ -135,19 +135,19 @@ function createTray(): void {
   tray.on('click', showWindow);
 }
 
-async function showUpdateDialog(options: MessageBoxOptions): Promise<void> {
+export async function showUpdateDialog(options: MessageBoxOptions): Promise<void> {
   if (win && !win.isDestroyed()) await dialog.showMessageBox(win, options);
   else await dialog.showMessageBox(options);
 }
 
-function getUpdateChannel(): { dir: string } | null {
+export function getUpdateChannel(): { dir: string } | null {
   if (process.platform === 'win32') return { dir: 'windows' };
   if (process.platform === 'darwin') return { dir: 'macos' };
   if (process.platform === 'linux') return { dir: 'linux' };
   return null;
 }
 
-function configureAutoUpdater(): void {
+export function configureAutoUpdater(): void {
   const channel = getUpdateChannel();
   if (!channel || DEV_URL || !app.isPackaged) return;
 
@@ -176,7 +176,7 @@ function configureAutoUpdater(): void {
   });
 }
 
-async function checkForUpdates(notifyUser = false): Promise<void> {
+export async function checkForUpdates(notifyUser = false): Promise<void> {
   if (DEV_URL || !app.isPackaged) {
     if (notifyUser) {
       await showUpdateDialog({
