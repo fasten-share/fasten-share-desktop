@@ -29,6 +29,7 @@ let tray: Tray | undefined;
 let serverProc: UtilityProcess | undefined;
 let updateCheckInFlight = false;
 let isQuitting = false;
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
 
 /** Ask the OS for a free TCP port on the loopback interface. */
 function findFreePort(): Promise<number> {
@@ -174,19 +175,25 @@ async function checkForUpdates(): Promise<void> {
   }
 }
 
-app.whenReady().then(async () => {
-  const url = DEV_URL ?? (await startNextServer());
-  createWindow(url);
-  createTray();
-  configureAutoUpdater();
-  setTimeout(() => void checkForUpdates(), 15_000);
-  setInterval(() => void checkForUpdates(), UPDATE_CHECK_INTERVAL_MS);
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', showWindow);
 
-  app.on('activate', () => {
-    if (!win || win.isDestroyed()) createWindow(url);
-    else showWindow();
+  app.whenReady().then(async () => {
+    const url = DEV_URL ?? (await startNextServer());
+    createWindow(url);
+    createTray();
+    configureAutoUpdater();
+    setTimeout(() => void checkForUpdates(), 15_000);
+    setInterval(() => void checkForUpdates(), UPDATE_CHECK_INTERVAL_MS);
+
+    app.on('activate', () => {
+      if (!win || win.isDestroyed()) createWindow(url);
+      else showWindow();
+    });
   });
-});
+}
 
 app.on('before-quit', () => {
   isQuitting = true;
