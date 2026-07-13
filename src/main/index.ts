@@ -12,7 +12,7 @@
 import { join } from 'node:path';
 import { createServer } from 'node:net';
 import { app, BrowserWindow, dialog, Menu, net, Tray, utilityProcess } from 'electron';
-import type { MessageBoxOptions, UtilityProcess } from 'electron';
+import type { MenuItem, MessageBoxOptions, UtilityProcess } from 'electron';
 import { autoUpdater } from 'electron-updater';
 
 // In dev, point at the running `next dev` server (see package.json `dev`).
@@ -26,6 +26,7 @@ const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 let win: BrowserWindow | undefined;
 let tray: Tray | undefined;
+let checkForUpdatesMenuItem: MenuItem | undefined;
 let serverProc: UtilityProcess | undefined;
 let updateCheckInFlight = false;
 let isQuitting = false;
@@ -110,10 +111,15 @@ function createTray(): void {
   const iconPath = join(app.getAppPath(), 'build', 'icons', 'icon-32.png');
   tray = new Tray(iconPath);
   tray.setToolTip('Fasten Share');
-  tray.setContextMenu(Menu.buildFromTemplate([
+  const contextMenu = Menu.buildFromTemplate([
     {
       label: '显示 Fasten Share',
       click: showWindow,
+    },
+    {
+      id: 'check-for-updates',
+      label: '检查更新…',
+      click: () => void checkForUpdates(true),
     },
     { type: 'separator' },
     {
@@ -123,8 +129,15 @@ function createTray(): void {
         app.quit();
       },
     },
-  ]));
+  ]);
+  checkForUpdatesMenuItem = contextMenu.getMenuItemById('check-for-updates') ?? undefined;
+  tray.setContextMenu(contextMenu);
   tray.on('click', showWindow);
+}
+
+async function showUpdateDialog(options: MessageBoxOptions): Promise<void> {
+  if (win && !win.isDestroyed()) await dialog.showMessageBox(win, options);
+  else await dialog.showMessageBox(options);
 }
 
 function getUpdateChannel(): { dir: string } | null {
@@ -149,12 +162,12 @@ function configureAutoUpdater(): void {
   autoUpdater.on('update-downloaded', async (info) => {
     const options: MessageBoxOptions = {
       type: 'info',
-      buttons: ['Restart now', 'Later'],
+      buttons: ['立即重启', '稍后'],
       defaultId: 0,
       cancelId: 1,
-      title: 'Fasten Share update ready',
-      message: `Fasten Share ${info.version} is ready to install.`,
-      detail: 'Restart Fasten Share to finish installing the update.',
+      title: 'Fasten Share 更新已就绪',
+      message: `Fasten Share ${info.version} 已下载完成。`,
+      detail: '重启 Fasten Share 即可完成更新。',
     };
     const result = win && !win.isDestroyed()
       ? await dialog.showMessageBox(win, options)
@@ -163,15 +176,60 @@ function configureAutoUpdater(): void {
   });
 }
 
-async function checkForUpdates(): Promise<void> {
-  if (DEV_URL || !app.isPackaged || updateCheckInFlight) return;
+async function checkForUpdates(notifyUser = false): Promise<void> {
+  if (DEV_URL || !app.isPackaged) {
+    if (notifyUser) {
+      await showUpdateDialog({
+        type: 'info',
+        title: '检查更新',
+        message: '开发环境不支持检查更新。',
+        detail: '请安装正式打包版本后再试。',
+      });
+    }
+    return;
+  }
+  if (updateCheckInFlight) return;
+
   updateCheckInFlight = true;
+  if (checkForUpdatesMenuItem) {
+    checkForUpdatesMenuItem.enabled = false;
+    checkForUpdatesMenuItem.label = '正在检查更新…';
+  }
   try {
-    await autoUpdater.checkForUpdates();
+    const result = await autoUpdater.checkForUpdates();
+    if (!notifyUser) return;
+
+    if (result?.isUpdateAvailable) {
+      await showUpdateDialog({
+        type: 'info',
+        title: '发现新版本',
+        message: `Fasten Share ${result.updateInfo.version} 正在下载。`,
+        detail: '下载完成后会提示你重启并安装。',
+      });
+    } else {
+      await showUpdateDialog({
+        type: 'info',
+        title: '检查更新',
+        message: '当前已是最新版本。',
+        detail: `当前版本：${app.getVersion()}`,
+      });
+    }
   } catch (error) {
     console.warn('[update] check failed', error);
+    if (notifyUser) {
+      await showUpdateDialog({
+        type: 'error',
+        title: '检查更新失败',
+        message: '暂时无法检查更新。',
+        detail: '请检查网络连接后重试。',
+      });
+    }
   } finally {
     updateCheckInFlight = false;
+    if (checkForUpdatesMenuItem) {
+      checkForUpdatesMenuItem.enabled = true;
+      checkForUpdatesMenuItem.label = '检查更新…';
+    }
   }
 }
 
@@ -183,8 +241,8 @@ if (!hasSingleInstanceLock) {
   app.whenReady().then(async () => {
     const url = DEV_URL ?? (await startNextServer());
     createWindow(url);
-    createTray();
     configureAutoUpdater();
+    createTray();
     setTimeout(() => void checkForUpdates(), 15_000);
     setInterval(() => void checkForUpdates(), UPDATE_CHECK_INTERVAL_MS);
 
