@@ -282,7 +282,7 @@ export async function checkForUpdates(notifyUser = false): Promise<void> {
         type: 'info',
         title: messages.update.newVersionAvailable,
         message: messages.update.downloading(result.updateInfo.version),
-        detail: messages.update.restartPrompt,
+        detail: `${messages.update.currentVersion(app.getVersion())}\n\n${messages.update.restartPrompt}`,
       });
     } else {
       await showUpdateDialog({

@@ -116,6 +116,7 @@ describe('automatic updates', () => {
     expect(mocks.dialog.showMessageBox).toHaveBeenLastCalledWith(expect.objectContaining({
       title: 'New Version Available',
       message: 'Fasten Share 2.0.0 is downloading.',
+      detail: 'Current version: 1.2.3\n\nYou will be prompted to restart and install when the download finishes.',
     }));
     expect(mocks.menuItem).toEqual({ enabled: true, label: 'Check for Updates…' });
 
@@ -129,6 +130,16 @@ describe('automatic updates', () => {
   it('uses Chinese update copy when the system locale is Chinese', async () => {
     mocks.app.getLocale.mockReturnValue('zh-CN');
     const main = await loadMain();
+    mocks.autoUpdater.checkForUpdates.mockResolvedValueOnce({
+      isUpdateAvailable: true, updateInfo: { version: '2.0.0' },
+    });
+    await main.checkForUpdates(true);
+    expect(mocks.dialog.showMessageBox).toHaveBeenLastCalledWith(expect.objectContaining({
+      title: '发现新版本',
+      message: 'Fasten Share 2.0.0 正在下载。',
+      detail: '当前版本：1.2.3\n\n下载完成后会提示你重启并安装。',
+    }));
+
     await main.checkForUpdates(true);
     expect(mocks.dialog.showMessageBox).toHaveBeenLastCalledWith(expect.objectContaining({
       title: '检查更新',
@@ -165,4 +176,3 @@ describe('automatic updates', () => {
     expect(mocks.menuItem).toEqual({ enabled: true, label: 'Check for Updates…' });
   });
 });
-
