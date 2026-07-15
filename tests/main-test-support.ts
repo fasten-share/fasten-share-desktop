@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => {
   const windows: any[] = [];
   const trays: any[] = [];
   const menuTemplates: any[][] = [];
-  const menuItem = { enabled: true, label: '检查更新…' };
+  const menuItem = { enabled: true, label: 'Check for Updates…' };
 
   const app = {
     isPackaged: true,
@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => {
     quit: vi.fn(),
     getPath: vi.fn(() => '/tmp/fasten-user-data'),
     getAppPath: vi.fn(() => '/opt/fasten-share'),
+    getLocale: vi.fn(() => 'en-US'),
     getVersion: vi.fn(() => '1.2.3'),
   };
 
@@ -120,9 +121,10 @@ beforeEach(() => {
   mocks.trays.length = 0;
   mocks.menuTemplates.length = 0;
   mocks.menuItem.enabled = true;
-  mocks.menuItem.label = '检查更新…';
+  mocks.menuItem.label = 'Check for Updates…';
   mocks.app.isPackaged = true;
   mocks.app.whenReady.mockImplementation(() => new Promise<void>(() => undefined));
+  mocks.app.getLocale.mockReturnValue('en-US');
   mocks.app.getVersion.mockReturnValue('1.2.3');
   mocks.dialog.showMessageBox.mockResolvedValue({ response: 1 });
   mocks.netFetch.mockResolvedValue({ ok: true });

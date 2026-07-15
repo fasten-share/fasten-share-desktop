@@ -60,9 +60,9 @@ describe('window and tray lifecycle', () => {
     expect(tray.setContextMenu).toHaveBeenCalledOnce();
 
     tray.handlers.get('click')!();
-    template.find((item) => item.label === '显示 Fasten Share').click();
+    template.find((item) => item.label === 'Show Fasten Share').click();
     expect(mocks.windows[0].show).toHaveBeenCalledTimes(2);
-    template.find((item) => item.label === '退出').click();
+    template.find((item) => item.label === 'Quit').click();
     expect(mocks.app.quit).toHaveBeenCalled();
   });
 
@@ -72,8 +72,19 @@ describe('window and tray lifecycle', () => {
     const updateItem = mocks.menuTemplates[0].find((item) => item.id === 'check-for-updates');
     updateItem.click();
     await vi.waitFor(() => expect(mocks.dialog.showMessageBox).toHaveBeenCalledWith(
-      expect.objectContaining({ message: '当前已是最新版本。' }),
+      expect.objectContaining({ message: 'You are using the latest version.' }),
     ));
+  });
+
+  it('uses Chinese tray copy when the system locale is Chinese', async () => {
+    mocks.app.getLocale.mockReturnValue('zh-CN');
+    const main = await loadMain();
+    main.createTray();
+    expect(mocks.menuTemplates[0]).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: '显示 Fasten Share' }),
+      expect.objectContaining({ label: '检查更新…' }),
+      expect.objectContaining({ label: '退出' }),
+    ]));
   });
 });
 

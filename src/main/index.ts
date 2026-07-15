@@ -14,6 +14,7 @@ import { createServer } from 'node:net';
 import { app, BrowserWindow, dialog, Menu, net, shell, Tray, utilityProcess } from 'electron';
 import type { MenuItem, MessageBoxOptions, UtilityProcess } from 'electron';
 import { autoUpdater } from 'electron-updater';
+import { getDesktopMessages } from './i18n';
 
 // In dev, point at the running `next dev` server (see package.json `dev`).
 const DEV_URL = process.env.DEV_URL;
@@ -111,22 +112,23 @@ export function showWindow(): void {
 }
 
 export function createTray(): void {
+  const messages = getDesktopMessages(app.getLocale());
   const iconPath = join(app.getAppPath(), 'build', 'icons', 'icon-32.png');
   tray = new Tray(iconPath);
   tray.setToolTip('Fasten Share');
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: '显示 Fasten Share',
+      label: messages.tray.show,
       click: showWindow,
     },
     {
       id: 'check-for-updates',
-      label: '检查更新…',
+      label: messages.tray.checkForUpdates,
       click: () => void checkForUpdates(true),
     },
     { type: 'separator' },
     {
-      label: '退出',
+      label: messages.tray.quit,
       click: () => {
         isQuitting = true;
         app.quit();
@@ -151,14 +153,15 @@ function clearUpdateInstallTimeout(): void {
 
 async function showUpdateInstallFallback(): Promise<void> {
   if (isQuitting) return;
+  const messages = getDesktopMessages(app.getLocale()).update;
   const options: MessageBoxOptions = {
     type: 'error',
-    buttons: ['前往官网下载', '取消'],
+    buttons: [messages.openDownloadPage, messages.cancel],
     defaultId: 0,
     cancelId: 1,
-    title: '自动更新失败',
-    message: 'Fasten Share 未能自动重启并完成更新。',
-    detail: '请前往官网下载最新版本并手动安装。',
+    title: messages.automaticUpdateFailed,
+    message: messages.automaticUpdateFailedMessage,
+    detail: messages.manualInstall,
   };
   const result = win && !win.isDestroyed()
     ? await dialog.showMessageBox(win, options)
@@ -196,14 +199,15 @@ export function configureAutoUpdater(): void {
     console.warn('[update] check failed', error);
   });
   autoUpdater.on('update-downloaded', async (info) => {
+    const messages = getDesktopMessages(app.getLocale()).update;
     const options: MessageBoxOptions = {
       type: 'info',
-      buttons: ['立即重启', '稍后'],
+      buttons: [messages.restartNow, messages.later],
       defaultId: 0,
       cancelId: 1,
-      title: 'Fasten Share 更新已就绪',
-      message: `Fasten Share ${info.version} 已下载完成。`,
-      detail: '重启 Fasten Share 即可完成更新。',
+      title: messages.ready,
+      message: messages.downloaded(info.version),
+      detail: messages.restartToFinish,
     };
     const result = win && !win.isDestroyed()
       ? await dialog.showMessageBox(win, options)
@@ -213,13 +217,14 @@ export function configureAutoUpdater(): void {
 }
 
 export async function checkForUpdates(notifyUser = false): Promise<void> {
+  const messages = getDesktopMessages(app.getLocale());
   if (DEV_URL || !app.isPackaged) {
     if (notifyUser) {
       await showUpdateDialog({
         type: 'info',
-        title: '检查更新',
-        message: '开发环境不支持检查更新。',
-        detail: '请安装正式打包版本后再试。',
+        title: messages.update.checkForUpdates,
+        message: messages.update.developmentUnavailable,
+        detail: messages.update.installProductionBuild,
       });
     }
     return;
@@ -229,7 +234,7 @@ export async function checkForUpdates(notifyUser = false): Promise<void> {
   updateCheckInFlight = true;
   if (checkForUpdatesMenuItem) {
     checkForUpdatesMenuItem.enabled = false;
-    checkForUpdatesMenuItem.label = '正在检查更新…';
+    checkForUpdatesMenuItem.label = messages.tray.checkingForUpdates;
   }
   try {
     const result = await autoUpdater.checkForUpdates();
@@ -238,16 +243,16 @@ export async function checkForUpdates(notifyUser = false): Promise<void> {
     if (result?.isUpdateAvailable) {
       await showUpdateDialog({
         type: 'info',
-        title: '发现新版本',
-        message: `Fasten Share ${result.updateInfo.version} 正在下载。`,
-        detail: '下载完成后会提示你重启并安装。',
+        title: messages.update.newVersionAvailable,
+        message: messages.update.downloading(result.updateInfo.version),
+        detail: messages.update.restartPrompt,
       });
     } else {
       await showUpdateDialog({
         type: 'info',
-        title: '检查更新',
-        message: '当前已是最新版本。',
-        detail: `当前版本：${app.getVersion()}`,
+        title: messages.update.checkForUpdates,
+        message: messages.update.latestVersion,
+        detail: messages.update.currentVersion(app.getVersion()),
       });
     }
   } catch (error) {
@@ -255,16 +260,16 @@ export async function checkForUpdates(notifyUser = false): Promise<void> {
     if (notifyUser) {
       await showUpdateDialog({
         type: 'error',
-        title: '检查更新失败',
-        message: '暂时无法检查更新。',
-        detail: '请检查网络连接后重试。',
+        title: messages.update.checkFailed,
+        message: messages.update.temporarilyUnavailable,
+        detail: messages.update.checkNetwork,
       });
     }
   } finally {
     updateCheckInFlight = false;
     if (checkForUpdatesMenuItem) {
       checkForUpdatesMenuItem.enabled = true;
-      checkForUpdatesMenuItem.label = '检查更新…';
+      checkForUpdatesMenuItem.label = messages.tray.checkForUpdates;
     }
   }
 }

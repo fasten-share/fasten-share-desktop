@@ -51,14 +51,16 @@ describe('automatic updates', () => {
     mocks.dialog.showMessageBox.mockResolvedValueOnce({ response: 0 });
     await downloaded({ version: '2.0.0' });
     expect(mocks.dialog.showMessageBox).toHaveBeenLastCalledWith(expect.objectContaining({
-      message: 'Fasten Share 2.0.0 已下载完成。',
+      message: 'Fasten Share 2.0.0 has been downloaded.',
     }));
     expect(mocks.autoUpdater.quitAndInstall).toHaveBeenCalledWith(false, true);
 
     main.createWindow('http://desktop/');
     await downloaded({ version: '2.1.0' });
     expect(mocks.dialog.showMessageBox).toHaveBeenLastCalledWith(
-      mocks.windows[0], expect.objectContaining({ message: 'Fasten Share 2.1.0 已下载完成。' }),
+      mocks.windows[0], expect.objectContaining({
+        message: 'Fasten Share 2.1.0 has been downloaded.',
+      }),
     );
   });
 
@@ -78,8 +80,8 @@ describe('automatic updates', () => {
 
     expect(mocks.dialog.showMessageBox).toHaveBeenLastCalledWith(expect.objectContaining({
       type: 'error',
-      title: '自动更新失败',
-      detail: '请前往官网下载最新版本并手动安装。',
+      title: 'Automatic Update Failed',
+      detail: 'Download the latest version from the official website and install it manually.',
     }));
     expect(mocks.shell.openExternal).toHaveBeenCalledWith('https://www.fastenshare.com/download/');
   });
@@ -100,7 +102,7 @@ describe('automatic updates', () => {
     await main.checkForUpdates(true);
     expect(mocks.autoUpdater.checkForUpdates).not.toHaveBeenCalled();
     expect(mocks.dialog.showMessageBox).toHaveBeenCalledWith(expect.objectContaining({
-      message: '开发环境不支持检查更新。',
+      message: 'Update checks are unavailable in development mode.',
     }));
   });
 
@@ -112,13 +114,26 @@ describe('automatic updates', () => {
     });
     await main.checkForUpdates(true);
     expect(mocks.dialog.showMessageBox).toHaveBeenLastCalledWith(expect.objectContaining({
-      title: '发现新版本', message: 'Fasten Share 2.0.0 正在下载。',
+      title: 'New Version Available',
+      message: 'Fasten Share 2.0.0 is downloading.',
     }));
-    expect(mocks.menuItem).toEqual({ enabled: true, label: '检查更新…' });
+    expect(mocks.menuItem).toEqual({ enabled: true, label: 'Check for Updates…' });
 
     await main.checkForUpdates(true);
     expect(mocks.dialog.showMessageBox).toHaveBeenLastCalledWith(expect.objectContaining({
-      message: '当前已是最新版本。', detail: '当前版本：1.2.3',
+      message: 'You are using the latest version.',
+      detail: 'Current version: 1.2.3',
+    }));
+  });
+
+  it('uses Chinese update copy when the system locale is Chinese', async () => {
+    mocks.app.getLocale.mockReturnValue('zh-CN');
+    const main = await loadMain();
+    await main.checkForUpdates(true);
+    expect(mocks.dialog.showMessageBox).toHaveBeenLastCalledWith(expect.objectContaining({
+      title: '检查更新',
+      message: '当前已是最新版本。',
+      detail: '当前版本：1.2.3',
     }));
   });
 
@@ -130,7 +145,7 @@ describe('automatic updates', () => {
     expect(mocks.dialog.showMessageBox).not.toHaveBeenCalled();
     await main.checkForUpdates(true);
     expect(mocks.dialog.showMessageBox).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'error', title: '检查更新失败',
+      type: 'error', title: 'Update Check Failed',
     }));
     expect(warn).toHaveBeenCalledTimes(2);
   });
@@ -143,11 +158,11 @@ describe('automatic updates', () => {
     const first = main.checkForUpdates();
     const second = main.checkForUpdates();
     expect(mocks.autoUpdater.checkForUpdates).toHaveBeenCalledOnce();
-    expect(mocks.menuItem).toEqual({ enabled: false, label: '正在检查更新…' });
+    expect(mocks.menuItem).toEqual({ enabled: false, label: 'Checking for Updates…' });
     await second;
     resolve({ isUpdateAvailable: false, updateInfo: { version: '1.2.3' } });
     await first;
-    expect(mocks.menuItem).toEqual({ enabled: true, label: '检查更新…' });
+    expect(mocks.menuItem).toEqual({ enabled: true, label: 'Check for Updates…' });
   });
 });
 
