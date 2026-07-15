@@ -60,6 +60,7 @@ const mocks = vi.hoisted(() => {
     }),
   };
   const dialog = { showMessageBox: vi.fn(async () => ({ response: 1 })) };
+  const shell = { openExternal: vi.fn(async () => undefined) };
   const netFetch = vi.fn(async () => ({ ok: true }));
   const serverProcess = { kill: vi.fn() };
   const utilityProcess = { fork: vi.fn(() => serverProcess) };
@@ -74,7 +75,7 @@ const mocks = vi.hoisted(() => {
 
   return {
     state, appHandlers, updaterHandlers, windows, trays, menuTemplates, menuItem,
-    app, BrowserWindow, Tray, Menu, dialog, netFetch, serverProcess, utilityProcess, autoUpdater,
+    app, BrowserWindow, Tray, Menu, dialog, shell, netFetch, serverProcess, utilityProcess, autoUpdater,
   };
 });
 
@@ -84,6 +85,7 @@ vi.mock('electron', () => ({
   dialog: mocks.dialog,
   Menu: mocks.Menu,
   net: { fetch: mocks.netFetch },
+  shell: mocks.shell,
   Tray: mocks.Tray,
   utilityProcess: mocks.utilityProcess,
 }));

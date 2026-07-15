@@ -11,7 +11,7 @@
  */
 import { join } from 'node:path';
 import { createServer } from 'node:net';
-import { app, BrowserWindow, dialog, Menu, net, Tray, utilityProcess } from 'electron';
+import { app, BrowserWindow, dialog, Menu, net, shell, Tray, utilityProcess } from 'electron';
 import type { MenuItem, MessageBoxOptions, UtilityProcess } from 'electron';
 import { autoUpdater } from 'electron-updater';
 
@@ -22,7 +22,9 @@ const DEV_URL = process.env.DEV_URL;
 const SERVER_DIR = join(process.resourcesPath, 'server-dist');
 const SERVER_ENTRY = join(SERVER_DIR, 'server.js');
 const UPDATE_BASE_URL = process.env.FASTEN_SHARE_UPDATE_BASE_URL || 'https://www.fastenshare.com/download';
+const DOWNLOAD_PAGE_URL = 'https://www.fastenshare.com/download/';
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const UPDATE_INSTALL_TIMEOUT_MS = 30_000;
 
 let win: BrowserWindow | undefined;
 let tray: Tray | undefined;
@@ -30,6 +32,7 @@ let checkForUpdatesMenuItem: MenuItem | undefined;
 let serverProc: UtilityProcess | undefined;
 let updateCheckInFlight = false;
 let isQuitting = false;
+let updateInstallTimeout: ReturnType<typeof setTimeout> | undefined;
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 
 /** Ask the OS for a free TCP port on the loopback interface. */
@@ -140,6 +143,39 @@ export async function showUpdateDialog(options: MessageBoxOptions): Promise<void
   else await dialog.showMessageBox(options);
 }
 
+function clearUpdateInstallTimeout(): void {
+  if (!updateInstallTimeout) return;
+  clearTimeout(updateInstallTimeout);
+  updateInstallTimeout = undefined;
+}
+
+async function showUpdateInstallFallback(): Promise<void> {
+  if (isQuitting) return;
+  const options: MessageBoxOptions = {
+    type: 'error',
+    buttons: ['前往官网下载', '取消'],
+    defaultId: 0,
+    cancelId: 1,
+    title: '自动更新失败',
+    message: 'Fasten Share 未能自动重启并完成更新。',
+    detail: '请前往官网下载最新版本并手动安装。',
+  };
+  const result = win && !win.isDestroyed()
+    ? await dialog.showMessageBox(win, options)
+    : await dialog.showMessageBox(options);
+  if (result.response === 0) await shell.openExternal(DOWNLOAD_PAGE_URL);
+}
+
+export function installDownloadedUpdate(): void {
+  clearUpdateInstallTimeout();
+  updateInstallTimeout = setTimeout(() => {
+    updateInstallTimeout = undefined;
+    void showUpdateInstallFallback();
+  }, UPDATE_INSTALL_TIMEOUT_MS);
+  updateInstallTimeout.unref?.();
+  autoUpdater.quitAndInstall(false, true);
+}
+
 export function getUpdateChannel(): { dir: string } | null {
   if (process.platform === 'win32') return { dir: 'windows' };
   if (process.platform === 'darwin') return { dir: 'macos' };
@@ -172,7 +208,7 @@ export function configureAutoUpdater(): void {
     const result = win && !win.isDestroyed()
       ? await dialog.showMessageBox(win, options)
       : await dialog.showMessageBox(options);
-    if (result.response === 0) autoUpdater.quitAndInstall(false, true);
+    if (result.response === 0) installDownloadedUpdate();
   });
 }
 
@@ -255,10 +291,12 @@ if (!hasSingleInstanceLock) {
 
 app.on('before-quit', () => {
   isQuitting = true;
+  clearUpdateInstallTimeout();
 });
 
 // Make sure the embedded server doesn't outlive the app.
 app.on('quit', () => {
+  clearUpdateInstallTimeout();
   tray?.destroy();
   serverProc?.kill();
 });

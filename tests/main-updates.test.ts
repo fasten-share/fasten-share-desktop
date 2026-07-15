@@ -62,6 +62,39 @@ describe('automatic updates', () => {
     );
   });
 
+  it('offers the website download when restart and install has not begun after 30 seconds', async () => {
+    vi.useFakeTimers();
+    const main = await loadMain();
+    main.configureAutoUpdater();
+    mocks.dialog.showMessageBox
+      .mockResolvedValueOnce({ response: 0 })
+      .mockResolvedValueOnce({ response: 0 });
+
+    await mocks.updaterHandlers.get('update-downloaded')!({ version: '2.0.0' });
+    expect(mocks.autoUpdater.quitAndInstall).toHaveBeenCalledWith(false, true);
+    expect(mocks.dialog.showMessageBox).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    expect(mocks.dialog.showMessageBox).toHaveBeenLastCalledWith(expect.objectContaining({
+      type: 'error',
+      title: '自动更新失败',
+      detail: '请前往官网下载最新版本并手动安装。',
+    }));
+    expect(mocks.shell.openExternal).toHaveBeenCalledWith('https://www.fastenshare.com/download/');
+  });
+
+  it('cancels the install timeout once the app begins quitting', async () => {
+    vi.useFakeTimers();
+    const main = await loadMain();
+    main.installDownloadedUpdate();
+    mocks.appHandlers.get('before-quit')!();
+
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    expect(mocks.dialog.showMessageBox).not.toHaveBeenCalled();
+  });
+
   it('explains that manual checks are unavailable in development', async () => {
     const main = await loadMain({ DEV_URL: 'http://localhost:8086' });
     await main.checkForUpdates(true);
