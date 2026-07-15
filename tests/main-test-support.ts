@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => {
   const state = { singleInstanceLock: false };
   const appHandlers = new Map<string, (...args: any[]) => any>();
   const updaterHandlers = new Map<string, (...args: any[]) => any>();
+  const ipcHandlers = new Map<string, (...args: any[]) => any>();
   const windows: any[] = [];
   const trays: any[] = [];
   const menuTemplates: any[][] = [];
@@ -35,6 +36,7 @@ const mocks = vi.hoisted(() => {
       show: vi.fn(),
       focus: vi.fn(),
       hide: vi.fn(),
+      webContents: { send: vi.fn() },
     };
     windows.push(instance);
     return instance;
@@ -61,6 +63,9 @@ const mocks = vi.hoisted(() => {
     }),
   };
   const dialog = { showMessageBox: vi.fn(async () => ({ response: 1 })) };
+  const ipcMain = {
+    handle: vi.fn((channel: string, handler: (...args: any[]) => any) => ipcHandlers.set(channel, handler)),
+  };
   const shell = { openExternal: vi.fn(async () => undefined) };
   const netFetch = vi.fn(async () => ({ ok: true }));
   const serverProcess = { kill: vi.fn() };
@@ -75,8 +80,9 @@ const mocks = vi.hoisted(() => {
   };
 
   return {
-    state, appHandlers, updaterHandlers, windows, trays, menuTemplates, menuItem,
-    app, BrowserWindow, Tray, Menu, dialog, shell, netFetch, serverProcess, utilityProcess, autoUpdater,
+    state, appHandlers, updaterHandlers, ipcHandlers, windows, trays, menuTemplates, menuItem,
+    app, BrowserWindow, Tray, Menu, dialog, ipcMain, shell, netFetch, serverProcess, utilityProcess,
+    autoUpdater,
   };
 });
 
@@ -84,6 +90,7 @@ vi.mock('electron', () => ({
   app: mocks.app,
   BrowserWindow: mocks.BrowserWindow,
   dialog: mocks.dialog,
+  ipcMain: mocks.ipcMain,
   Menu: mocks.Menu,
   net: { fetch: mocks.netFetch },
   shell: mocks.shell,
@@ -117,6 +124,7 @@ beforeEach(() => {
   mocks.state.singleInstanceLock = false;
   mocks.appHandlers.clear();
   mocks.updaterHandlers.clear();
+  mocks.ipcHandlers.clear();
   mocks.windows.length = 0;
   mocks.trays.length = 0;
   mocks.menuTemplates.length = 0;

@@ -7,7 +7,16 @@ describe('window and tray lifecycle', () => {
     const main = await loadMain();
     main.createWindow('http://desktop/');
     const window = mocks.windows[0];
-    expect(window.options).toMatchObject({ width: 1100, height: 760, title: 'Fasten Share' });
+    expect(window.options).toMatchObject({
+      width: 1100,
+      height: 760,
+      title: 'Fasten Share',
+      webPreferences: {
+        preload: expect.stringMatching(/main\/preload\.js$/),
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    });
     expect(window.removeMenu).toHaveBeenCalledOnce();
     expect(window.loadURL).toHaveBeenCalledWith('http://desktop/');
 
@@ -85,6 +94,27 @@ describe('window and tray lifecycle', () => {
       expect.objectContaining({ label: '检查更新…' }),
       expect.objectContaining({ label: '退出' }),
     ]));
+  });
+
+  it('synchronizes language changes from the client into the desktop UI', async () => {
+    const main = await loadMain();
+    main.createWindow('http://desktop/');
+    main.createTray();
+    main.configureLanguageBridge();
+
+    const getLanguage = mocks.ipcHandlers.get('fasten-share:language:get')!;
+    const setLanguage = mocks.ipcHandlers.get('fasten-share:language:set')!;
+    expect(getLanguage()).toBe('en');
+    expect(setLanguage({}, 'unsupported')).toBe('en');
+    expect(setLanguage({}, 'zh')).toBe('zh');
+    expect(mocks.menuTemplates.at(-1)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: '显示 Fasten Share' }),
+      expect.objectContaining({ label: '退出' }),
+    ]));
+    expect(mocks.windows[0].webContents.send).toHaveBeenCalledWith(
+      'fasten-share:language:changed',
+      'zh',
+    );
   });
 });
 

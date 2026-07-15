@@ -11,10 +11,11 @@
  */
 import { join } from 'node:path';
 import { createServer } from 'node:net';
-import { app, BrowserWindow, dialog, Menu, net, shell, Tray, utilityProcess } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, net, shell, Tray, utilityProcess } from 'electron';
 import type { MenuItem, MessageBoxOptions, UtilityProcess } from 'electron';
 import { autoUpdater } from 'electron-updater';
-import { getDesktopMessages } from './i18n';
+import { getDesktopMessages, resolveDesktopLocale, type DesktopLocale } from './i18n';
+import { DESKTOP_LANGUAGE_CHANNELS } from './language-bridge';
 
 // In dev, point at the running `next dev` server (see package.json `dev`).
 const DEV_URL = process.env.DEV_URL;
@@ -34,7 +35,33 @@ let serverProc: UtilityProcess | undefined;
 let updateCheckInFlight = false;
 let isQuitting = false;
 let updateInstallTimeout: ReturnType<typeof setTimeout> | undefined;
+let selectedDesktopLocale: DesktopLocale | undefined;
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
+
+export function getDesktopLanguage(): DesktopLocale {
+  return selectedDesktopLocale ?? resolveDesktopLocale(app.getLocale());
+}
+
+function getMessages() {
+  return getDesktopMessages(getDesktopLanguage());
+}
+
+export function setDesktopLanguage(language: unknown): DesktopLocale {
+  if (language !== 'en' && language !== 'zh') return getDesktopLanguage();
+  selectedDesktopLocale = language;
+  refreshTrayMenu();
+  if (win && !win.isDestroyed()) {
+    win.webContents.send(DESKTOP_LANGUAGE_CHANNELS.changed, language);
+  }
+  return language;
+}
+
+export function configureLanguageBridge(): void {
+  ipcMain.handle(DESKTOP_LANGUAGE_CHANNELS.get, () => getDesktopLanguage());
+  ipcMain.handle(DESKTOP_LANGUAGE_CHANNELS.set, (_event, language: unknown) => (
+    setDesktopLanguage(language)
+  ));
+}
 
 /** Ask the OS for a free TCP port on the loopback interface. */
 export function findFreePort(): Promise<number> {
@@ -88,6 +115,11 @@ export function createWindow(url: string): void {
     width: 1100,
     height: 760,
     title: 'Fasten Share',
+    webPreferences: {
+      preload: join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
     // No webSecurity override needed: the renderer only talks to its own
     // same-origin Next server (UI + control API + proxy). All LLM forwarding
     // now happens in the Node server, not the browser.
@@ -112,10 +144,16 @@ export function showWindow(): void {
 }
 
 export function createTray(): void {
-  const messages = getDesktopMessages(app.getLocale());
   const iconPath = join(app.getAppPath(), 'build', 'icons', 'icon-32.png');
   tray = new Tray(iconPath);
   tray.setToolTip('Fasten Share');
+  refreshTrayMenu();
+  tray.on('click', showWindow);
+}
+
+function refreshTrayMenu(): void {
+  if (!tray) return;
+  const messages = getMessages();
   const contextMenu = Menu.buildFromTemplate([
     {
       label: messages.tray.show,
@@ -137,7 +175,6 @@ export function createTray(): void {
   ]);
   checkForUpdatesMenuItem = contextMenu.getMenuItemById('check-for-updates') ?? undefined;
   tray.setContextMenu(contextMenu);
-  tray.on('click', showWindow);
 }
 
 export async function showUpdateDialog(options: MessageBoxOptions): Promise<void> {
@@ -153,7 +190,7 @@ function clearUpdateInstallTimeout(): void {
 
 async function showUpdateInstallFallback(): Promise<void> {
   if (isQuitting) return;
-  const messages = getDesktopMessages(app.getLocale()).update;
+  const messages = getMessages().update;
   const options: MessageBoxOptions = {
     type: 'error',
     buttons: [messages.openDownloadPage, messages.cancel],
@@ -199,7 +236,7 @@ export function configureAutoUpdater(): void {
     console.warn('[update] check failed', error);
   });
   autoUpdater.on('update-downloaded', async (info) => {
-    const messages = getDesktopMessages(app.getLocale()).update;
+    const messages = getMessages().update;
     const options: MessageBoxOptions = {
       type: 'info',
       buttons: [messages.restartNow, messages.later],
@@ -217,7 +254,7 @@ export function configureAutoUpdater(): void {
 }
 
 export async function checkForUpdates(notifyUser = false): Promise<void> {
-  const messages = getDesktopMessages(app.getLocale());
+  const messages = getMessages();
   if (DEV_URL || !app.isPackaged) {
     if (notifyUser) {
       await showUpdateDialog({
@@ -281,6 +318,7 @@ if (!hasSingleInstanceLock) {
 
   app.whenReady().then(async () => {
     const url = DEV_URL ?? (await startNextServer());
+    configureLanguageBridge();
     createWindow(url);
     configureAutoUpdater();
     createTray();
