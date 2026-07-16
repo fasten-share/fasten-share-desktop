@@ -48,12 +48,13 @@ describe('automatic updates', () => {
     const main = await loadMain();
     main.configureAutoUpdater();
     const downloaded = mocks.updaterHandlers.get('update-downloaded')!;
-    mocks.dialog.showMessageBox.mockResolvedValueOnce({ response: 0 });
+    mocks.dialog.showMessageBox
+      .mockResolvedValueOnce({ response: 1 })
+      .mockResolvedValueOnce({ response: 0 });
     await downloaded({ version: '2.0.0' });
     expect(mocks.dialog.showMessageBox).toHaveBeenLastCalledWith(expect.objectContaining({
       message: 'Fasten Share 2.0.0 has been downloaded.',
     }));
-    expect(mocks.autoUpdater.quitAndInstall).toHaveBeenCalledWith(false, true);
 
     main.createWindow('http://desktop/');
     await downloaded({ version: '2.1.0' });
@@ -62,6 +63,29 @@ describe('automatic updates', () => {
         message: 'Fasten Share 2.1.0 has been downloaded.',
       }),
     );
+    expect(mocks.autoUpdater.quitAndInstall).toHaveBeenCalledWith(false, true);
+  });
+
+  it('offers the website directly on the next update check when an install attempt did not quit', async () => {
+    vi.useFakeTimers();
+    const main = await loadMain();
+    main.configureAutoUpdater();
+    mocks.dialog.showMessageBox
+      .mockResolvedValueOnce({ response: 0 })
+      .mockResolvedValueOnce({ response: 0 });
+
+    await mocks.updaterHandlers.get('update-downloaded')!({ version: '2.0.0' });
+    await main.checkForUpdates(true);
+
+    expect(mocks.autoUpdater.quitAndInstall).toHaveBeenCalledTimes(1);
+    expect(mocks.autoUpdater.checkForUpdates).not.toHaveBeenCalled();
+    expect(mocks.dialog.showMessageBox).toHaveBeenCalledTimes(2);
+    expect(mocks.dialog.showMessageBox).toHaveBeenLastCalledWith(expect.objectContaining({
+      type: 'error',
+      title: 'Automatic Update Failed',
+      detail: 'Download the latest version from the official website and install it manually.',
+    }));
+    expect(mocks.shell.openExternal).toHaveBeenCalledWith('https://www.fastenshare.com/download/');
   });
 
   it('offers the website download when restart and install has not begun after 30 seconds', async () => {

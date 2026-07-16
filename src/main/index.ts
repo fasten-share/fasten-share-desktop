@@ -35,6 +35,7 @@ let serverProc: UtilityProcess | undefined;
 let updateCheckInFlight = false;
 let isQuitting = false;
 let updateInstallTimeout: ReturnType<typeof setTimeout> | undefined;
+let hasAttemptedUpdateInstall = false;
 let selectedDesktopLocale: DesktopLocale | undefined;
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 
@@ -207,6 +208,12 @@ async function showUpdateInstallFallback(): Promise<void> {
 }
 
 export function installDownloadedUpdate(): void {
+  if (hasAttemptedUpdateInstall) {
+    clearUpdateInstallTimeout();
+    void showUpdateInstallFallback();
+    return;
+  }
+  hasAttemptedUpdateInstall = true;
   clearUpdateInstallTimeout();
   updateInstallTimeout = setTimeout(() => {
     updateInstallTimeout = undefined;
@@ -236,6 +243,11 @@ export function configureAutoUpdater(): void {
     console.warn('[update] check failed', error);
   });
   autoUpdater.on('update-downloaded', async (info) => {
+    if (hasAttemptedUpdateInstall) {
+      clearUpdateInstallTimeout();
+      await showUpdateInstallFallback();
+      return;
+    }
     const messages = getMessages().update;
     const options: MessageBoxOptions = {
       type: 'info',
@@ -264,6 +276,11 @@ export async function checkForUpdates(notifyUser = false): Promise<void> {
         detail: messages.update.installProductionBuild,
       });
     }
+    return;
+  }
+  if (hasAttemptedUpdateInstall) {
+    clearUpdateInstallTimeout();
+    await showUpdateInstallFallback();
     return;
   }
   if (updateCheckInFlight) return;
