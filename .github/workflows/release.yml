@@ -1,0 +1,133 @@
+name: Release Desktop
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Create tag and publish release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout desktop
+        uses: actions/checkout@v7
+        with:
+          path: fasten-share-desktop
+          fetch-depth: 0
+
+      - name: Read version from package.json
+        id: version
+        working-directory: fasten-share-desktop
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid package.json version: $version" >&2
+            exit 1
+          fi
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "Release version: v$version"
+
+      - name: Find successful build for this commit
+        id: build-run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          run_id=$(gh run list \
+            --workflow build.yml \
+            --commit "$GITHUB_SHA" \
+            --status success \
+            --limit 1 \
+            --json databaseId \
+            --jq '.[0].databaseId')
+          if [[ -z "$run_id" || "$run_id" == "null" ]]; then
+            echo "No successful Build Desktop run found for commit $GITHUB_SHA." >&2
+            echo "Run the Build Desktop workflow for this commit before releasing." >&2
+            exit 1
+          fi
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "Reusing artifacts from build run $run_id."
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.build-run.outputs.run_id }}
+          path: release-assets
+          pattern: fasten-share-desktop-*
+          merge-multiple: true
+
+      - name: Verify release assets
+        shell: bash
+        run: |
+          mapfile -d '' files < <(find release-assets -type f -print0)
+          if (( ${#files[@]} == 0 )); then
+            echo "No release assets found in build run ${{ steps.build-run.outputs.run_id }}." >&2
+            exit 1
+          fi
+          printf '%s\n' "${files[@]}"
+
+      - name: Create and push tag
+        working-directory: fasten-share-desktop
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        shell: bash
+        run: |
+          if git rev-parse --verify --quiet "refs/tags/$TAG" >/dev/null; then
+            tagged_commit=$(git rev-parse "$TAG^{commit}")
+            current_commit=$(git rev-parse HEAD)
+            if [[ "$tagged_commit" != "$current_commit" ]]; then
+              echo "Tag $TAG already points to another commit. Update package.json before releasing." >&2
+              exit 1
+            fi
+            echo "Reusing $TAG from an earlier run."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag --annotate "$TAG" --message "Release $TAG"
+            git push origin "$TAG"
+          fi
+
+      - name: Create or reuse draft release
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            is_draft=$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq .draft)
+            if [[ "$is_draft" != "true" ]]; then
+              echo "Release $TAG has already been published." >&2
+              exit 1
+            fi
+            echo "Reusing draft release $TAG from an earlier run."
+          else
+            gh release create "$TAG" \
+              --draft \
+              --verify-tag \
+              --title "Fasten Share $TAG" \
+              --generate-notes
+          fi
+
+      - name: Upload assets and publish release
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          mapfile -d '' files < <(find release-assets -type f -print0)
+          gh release upload "$TAG" "${files[@]}" --clobber
+          gh release edit "$TAG" --draft=false
