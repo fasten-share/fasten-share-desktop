@@ -26,6 +26,19 @@ describe('window and tray lifecycle', () => {
     expect(window.hide).toHaveBeenCalledOnce();
   });
 
+  it('opens explicit new-window links in the system default app', async () => {
+    const main = await loadMain();
+    main.createWindow('http://desktop/');
+    const window = mocks.windows[0];
+    const githubUrl = 'https://github.com/fasten-share/fasten-share-client/issues';
+
+    expect(window.webContentsHandlers.get('window-open')!({ url: githubUrl })).toEqual({
+      action: 'deny',
+    });
+    expect(mocks.shell.openExternal).toHaveBeenCalledWith(githubUrl);
+    expect(window.webContents.on).not.toHaveBeenCalledWith('will-navigate', expect.any(Function));
+  });
+
   it('restores, shows, and focuses a minimized window', async () => {
     const main = await loadMain();
     main.createWindow('http://desktop/');

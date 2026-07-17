@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, shell } from 'electron';
 import { onDesktopLanguageChanged } from './desktop-language';
 import { DESKTOP_LANGUAGE_CHANNELS } from './language-bridge';
 
@@ -27,6 +27,15 @@ export function createWindow(url: string): void {
     },
   });
   mainWindow.removeMenu();
+  const openExternal = (targetUrl: string): void => {
+    // Explicit new-window links belong in the user's default app.
+    if (!targetUrl.startsWith('mailto:') && !/^https?:\/\//i.test(targetUrl)) return;
+    void shell.openExternal(targetUrl);
+  };
+  mainWindow.webContents.setWindowOpenHandler(({ url: targetUrl }) => {
+    openExternal(targetUrl);
+    return { action: 'deny' };
+  });
   void mainWindow.loadURL(url);
   mainWindow.on('close', (event) => {
     if (appIsQuitting) return;

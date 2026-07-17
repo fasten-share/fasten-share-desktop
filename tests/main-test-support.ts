@@ -24,9 +24,11 @@ const mocks = vi.hoisted(() => {
 
   const BrowserWindow = vi.fn(function (this: any, options: any) {
     const handlers = new Map<string, (...args: any[]) => any>();
+    const webContentsHandlers = new Map<string, (...args: any[]) => any>();
     const instance = {
       options,
       handlers,
+      webContentsHandlers,
       removeMenu: vi.fn(),
       loadURL: vi.fn(async () => undefined),
       on: vi.fn((event: string, handler: (...args: any[]) => any) => handlers.set(event, handler)),
@@ -36,7 +38,13 @@ const mocks = vi.hoisted(() => {
       show: vi.fn(),
       focus: vi.fn(),
       hide: vi.fn(),
-      webContents: { send: vi.fn() },
+      webContents: {
+        send: vi.fn(),
+        on: vi.fn((event: string, handler: (...args: any[]) => any) => webContentsHandlers.set(event, handler)),
+        setWindowOpenHandler: vi.fn((handler: (...args: any[]) => any) => {
+          webContentsHandlers.set('window-open', handler);
+        }),
+      },
     };
     windows.push(instance);
     return instance;
