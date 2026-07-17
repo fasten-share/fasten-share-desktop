@@ -51,6 +51,7 @@ describe('embedded Next server', () => {
         HOSTNAME: '127.0.0.1',
         NODE_ENV: 'production',
         FS_DATA_DIR: '/tmp/fasten-user-data',
+        FS_CREDENTIAL_KEY: expect.any(String),
       }),
     });
     expect(options.env.PORT).toMatch(/^\d+$/);

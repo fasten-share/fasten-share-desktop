@@ -2,6 +2,7 @@ import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { app, net, utilityProcess } from 'electron';
 import type { UtilityProcess } from 'electron';
+import { getCredentialKey } from './credential-key';
 
 const SERVER_DIR = join(process.resourcesPath, 'server-dist');
 const SERVER_ENTRY = join(SERVER_DIR, 'server.js');
@@ -47,6 +48,7 @@ export async function startNextServer(): Promise<string> {
       HOSTNAME: '127.0.0.1',
       NODE_ENV: 'production',
       FS_DATA_DIR: app.getPath('userData'),
+      FS_CREDENTIAL_KEY: getCredentialKey(),
     },
   });
   const url = `http://127.0.0.1:${port}/`;

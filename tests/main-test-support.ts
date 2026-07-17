@@ -70,6 +70,11 @@ const mocks = vi.hoisted(() => {
   const netFetch = vi.fn(async () => ({ ok: true }));
   const serverProcess = { kill: vi.fn() };
   const utilityProcess = { fork: vi.fn(() => serverProcess) };
+  const safeStorage = {
+    isEncryptionAvailable: vi.fn(() => true),
+    encryptString: vi.fn((value: string) => Buffer.from(value, 'utf8')),
+    decryptString: vi.fn((value: Buffer) => value.toString('utf8')),
+  };
   const autoUpdater = {
     autoDownload: false,
     autoInstallOnAppQuit: false,
@@ -81,7 +86,7 @@ const mocks = vi.hoisted(() => {
 
   return {
     state, appHandlers, updaterHandlers, ipcHandlers, windows, trays, menuTemplates, menuItem,
-    app, BrowserWindow, Tray, Menu, dialog, ipcMain, shell, netFetch, serverProcess, utilityProcess,
+    app, BrowserWindow, Tray, Menu, dialog, ipcMain, shell, netFetch, serverProcess, utilityProcess, safeStorage,
     autoUpdater,
   };
 });
@@ -96,6 +101,7 @@ vi.mock('electron', () => ({
   shell: mocks.shell,
   Tray: mocks.Tray,
   utilityProcess: mocks.utilityProcess,
+  safeStorage: mocks.safeStorage,
 }));
 
 vi.mock('electron-updater', () => ({ autoUpdater: mocks.autoUpdater }));
