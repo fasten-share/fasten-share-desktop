@@ -1,0 +1,82 @@
+name: Upload Desktop Artifacts to OSS
+
+on:
+  workflow_dispatch:
+    inputs:
+      oss_prefix:
+        description: "OSS prefix for desktop downloads"
+        required: false
+        default: "download"
+      clean_platform_prefixes:
+        description: "Delete existing files under each platform prefix before uploading"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: desktop-oss-upload
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    name: Upload current commit artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout desktop
+        uses: actions/checkout@v7
+        with:
+          path: fasten-share-desktop
+          persist-credentials: false
+
+      - name: Find successful build for this commit
+        id: build-run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          run_id=$(gh run list \
+            --workflow build.yml \
+            --commit "$GITHUB_SHA" \
+            --status success \
+            --limit 1 \
+            --json databaseId \
+            --jq '.[0].databaseId')
+          if [[ -z "$run_id" || "$run_id" == "null" ]]; then
+            echo "No successful Build Desktop run found for commit $GITHUB_SHA." >&2
+            echo "Run the Build Desktop workflow for this commit before uploading to OSS." >&2
+            exit 1
+          fi
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "Reusing artifacts from build run $run_id."
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.build-run.outputs.run_id }}
+          path: release-assets
+          pattern: fasten-share-desktop-*
+
+      - name: Install OSS client
+        working-directory: fasten-share-desktop
+        run: npm install --no-save --package-lock=false --ignore-scripts --omit=dev ali-oss@6.23.0
+
+      - name: Upload artifacts to OSS
+        working-directory: fasten-share-desktop
+        env:
+          OSS_REGION: ${{ secrets.OSS_REGION }}
+          OSS_BUCKET: ${{ secrets.OSS_BUCKET }}
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+          OSS_ENDPOINT: ${{ secrets.OSS_ENDPOINT }}
+          OSS_PREFIX: ${{ inputs.oss_prefix }}
+          OSS_CLEAN_PLATFORM_PREFIXES: ${{ inputs.clean_platform_prefixes }}
+          OSS_UPLOAD_DIR: ../release-assets
+        run: node .github/scripts/upload-artifacts-to-oss.mjs
